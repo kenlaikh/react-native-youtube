@@ -59,19 +59,18 @@ export default class YouTube extends React.Component {
     super(props);
 
     this.state = {
-      moduleMargin: StyleSheet.hairlineWidth * 2,
       fullscreen: props.fullscreen,
+      resizingHackFlag: false,
     };
   }
 
   componentWillMount() {
     BackHandler.addEventListener('hardwareBackPress', this._backPress);
+  }
 
-    // Periodically triggeting a forced unnoticable layout rendering until onReady to make sure the
-    // native loading progress is shown
-    this._interval = setInterval(() => {
-      this.setState({ moduleMargin: Math.random() / 2 });
-    }, 250);
+  componentDidMount() {
+    // Make sure the Loading indication is displayed so use this hack before the video loads
+    this._fireResizingHack();
   }
 
   componentWillReceiveProps(nextProps) {
@@ -83,6 +82,27 @@ export default class YouTube extends React.Component {
 
   componentWillUnmount() {
     BackHandler.removeEventListener('hardwareBackPress', this._backPress);
+
+    clearInterval(this._timeout);
+  }
+
+  // The Android YouTube native module is pretty problematic when it comes to mounting correctly
+  // and rendering inside React-Native's views hierarchy. For now we must trigger some layout
+  // changes to force a real render on it so it will respotision it's controls after several
+  // specific events
+  _fireResizingHack() {
+    clearInterval(this._timeout);
+
+    let wait = 0.2;
+
+    const next = () => {
+      this.setState(state => ({ resizingHackFlag: !state.resizingHackFlag }));
+
+      wait = wait >= 1.5 ? 1.5 : wait * 1.4;
+      this._timeout = setTimeout(next, wait * 1000);
+    };
+
+    next();
   }
 
   _backPress = () => {
@@ -93,21 +113,19 @@ export default class YouTube extends React.Component {
     return false;
   };
 
+  _onLayout = () => {
+    // When the Native player changes it's layout, we should also force a resizing hack to make
+    // sure the controls are in their correct place
+    this._fireResizingHack();
+  };
+
   _onError = event => {
     if (this.props.onError) this.props.onError(event.nativeEvent);
   };
 
   _onReady = event => {
-    clearInterval(this._interval);
+    this._fireResizingHack();
 
-    // The Android YouTube native module is pretty problematic when it comes to mounting correctly
-    // and rendering inside React-Native's views hierarchy. For now we must trigger some layout
-    // changes to force a real render on it so it will smoothly appear after ready and show
-    // controls. We also use the minimal margin to avoid `UNAUTHORIZED_OVERLAY` error from the
-    // native module that is very sensitive to being covered or even touching its containing view.
-    setTimeout(() => {
-      this.setState({ moduleMargin: StyleSheet.hairlineWidth });
-    }, 250);
     if (this.props.onReady) this.props.onReady(event.nativeEvent);
   };
 
@@ -183,14 +201,17 @@ export default class YouTube extends React.Component {
 
   render() {
     return (
-      <View style={[styles.container, this.props.style]}>
+      <View onLayout={this._onLayout} style={[styles.container, this.props.style]}>
         <RCTYouTube
           ref={component => {
             this._nativeComponentRef = component;
           }}
           {...this.props}
           fullscreen={this.state.fullscreen}
-          style={[styles.module, { margin: this.state.moduleMargin }]}
+          style={[
+            styles.module,
+            { marginRight: this.state.resizingHackFlag ? StyleSheet.hairlineWidth : 0 },
+          ]}
           onYouTubeError={this._onError}
           onYouTubeReady={this._onReady}
           onYouTubeChangeState={this._onChangeState}
