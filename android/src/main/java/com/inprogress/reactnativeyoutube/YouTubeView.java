@@ -55,6 +55,10 @@ public class YouTubeView extends FrameLayout {
         if (getReactContext().getCurrentActivity() != null) {
             FragmentManager fragmentManager = getReactContext().getCurrentActivity().getFragmentManager();
 
+            if (mYouTubeController != null) {
+                mYouTubeController.onYoutubeViewDetachedFromWindow();
+            }
+
             // Code crashes with java.lang.IllegalStateException: Activity has been destroyed
             // if our activity has been destroyed when this runs
             if (mVideoFragment != null) {
