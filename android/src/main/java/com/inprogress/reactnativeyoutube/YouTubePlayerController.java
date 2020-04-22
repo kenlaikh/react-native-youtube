@@ -318,6 +318,10 @@ public class YouTubePlayerController implements
         }
     }
 
+    public void onYoutubeViewDetachedFromWindow() {
+        mYouTubePlayer = null;
+    }
+
     private boolean isPlay() {
         return mPlay;
     }
